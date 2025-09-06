@@ -1,4 +1,4 @@
-// src/app/products/[id]/page.jsx
+// src/app/products/[id]/page.jsx - Updated Product Detail Page with Layout
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,8 +7,11 @@ import { productOperations } from '../../../lib/firestore';
 import { formatCurrency } from '../../../lib/utils';
 import { Button } from '../../../components/ui/Button';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useCart } from '../../../contexts/CartContext';
+import Layout from '../../../components/layout/Layout';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { getPlaceholderByCategory } from '../../../lib/placeholderImage';
 
 export default function ProductDetailPage({ params }) {
   const [product, setProduct] = useState(null);
@@ -18,6 +21,13 @@ export default function ProductDetailPage({ params }) {
   const [selectedImage, setSelectedImage] = useState(0);
   
   const { user } = useAuth();
+  const { 
+    addToCart, 
+    isInCart, 
+    getItemQuantity, 
+    updateQuantity,
+    removeFromCart 
+  } = useCart();
   const router = useRouter();
   const productId = params.id;
 
@@ -49,8 +59,21 @@ export default function ProductDetailPage({ params }) {
       return;
     }
 
-    // This will be implemented in Day 3 with cart functionality
-    toast.success(`${quantity}x ${product.name} added to cart!`);
+    if (!product.availability) {
+      toast.error('This item is currently out of stock');
+      return;
+    }
+
+    addToCart(product, quantity);
+    setQuantity(1); // Reset quantity after adding
+  };
+
+  const handleUpdateCartQuantity = (newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(product.id);
+      return;
+    }
+    updateQuantity(product.id, newQuantity);
   };
 
   const handleQuantityChange = (change) => {
@@ -60,9 +83,29 @@ export default function ProductDetailPage({ params }) {
     }
   };
 
+  const handleBuyNow = () => {
+    if (!user) {
+      toast.error('Please login to continue');
+      router.push('/login');
+      return;
+    }
+
+    // Add to cart and redirect to checkout
+    if (addToCart(product, quantity)) {
+      router.push('/checkout');
+    }
+  };
+
+  const handleImageError = (e) => {
+    e.target.src = getPlaceholderByCategory(product?.category);
+  };
+
+  const inCart = isInCart(product?.id);
+  const cartQuantity = getItemQuantity(product?.id);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <Layout>
         <div className="container mx-auto px-4 py-8">
           <div className="animate-pulse">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -87,38 +130,51 @@ export default function ProductDetailPage({ params }) {
             </div>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 mb-4">
-            <span className="text-6xl">❌</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <div className="space-x-4">
-            <Button onClick={loadProduct}>Try Again</Button>
-            <Link href="/">
-              <Button variant="outline">Go Home</Button>
-            </Link>
+      <Layout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 mb-4">
+              <span className="text-6xl">❌</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <div className="space-x-4">
+              <Button onClick={loadProduct}>Try Again</Button>
+              <Link href="/">
+                <Button variant="outline">Go Home</Button>
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   if (!product) {
-    return null;
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Product Not Found</h1>
+            <Link href="/products">
+              <Button>Browse Products</Button>
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
   }
 
   const images = product.images || [product.imageURL].filter(Boolean);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       <div className="container mx-auto px-4 py-8">
         {/* Breadcrumb */}
         <nav className="flex mb-8" aria-label="Breadcrumb">
@@ -155,13 +211,14 @@ export default function ProductDetailPage({ params }) {
                   src={images[selectedImage]}
                   alt={product.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.src = '/images/placeholder-prasad.jpg';
-                  }}
+                  onError={handleImageError}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <span className="text-8xl">🪔</span>
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-50 to-yellow-50">
+                  <div className="text-center">
+                    <span className="text-8xl opacity-70">🪔</span>
+                    <p className="text-gray-500 mt-2">Authentic Prasad</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -181,6 +238,7 @@ export default function ProductDetailPage({ params }) {
                       src={image}
                       alt={`${product.name} ${index + 1}`}
                       className="w-full h-full object-cover"
+                      onError={handleImageError}
                     />
                   </button>
                 ))}
@@ -208,9 +266,14 @@ export default function ProductDetailPage({ params }) {
                 {formatCurrency(product.price)}
               </span>
               {product.originalPrice && product.originalPrice > product.price && (
-                <span className="text-xl text-gray-500 line-through">
-                  {formatCurrency(product.originalPrice)}
-                </span>
+                <>
+                  <span className="text-xl text-gray-500 line-through">
+                    {formatCurrency(product.originalPrice)}
+                  </span>
+                  <span className="bg-red-500 text-white text-sm font-bold px-2 py-1 rounded-full">
+                    {Math.round((1 - product.price / product.originalPrice) * 100)}% OFF
+                  </span>
+                </>
               )}
             </div>
 
@@ -246,8 +309,40 @@ export default function ProductDetailPage({ params }) {
               )}
             </div>
 
-            {/* Quantity Selector */}
-            {product.availability && (
+            {/* Cart Status */}
+            {inCart && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-green-800 font-semibold">✅ Added to Cart</h4>
+                    <p className="text-green-700 text-sm">
+                      {cartQuantity} {cartQuantity > 1 ? 'items' : 'item'} in your cart
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleUpdateCartQuantity(cartQuantity - 1)}
+                      className="p-2 border border-green-300 rounded-lg hover:bg-green-100"
+                    >
+                      <span className="text-lg">−</span>
+                    </button>
+                    <span className="px-3 py-2 font-semibold min-w-[3rem] text-center">
+                      {cartQuantity}
+                    </span>
+                    <button
+                      onClick={() => handleUpdateCartQuantity(cartQuantity + 1)}
+                      disabled={cartQuantity >= product.stock}
+                      className="p-2 border border-green-300 rounded-lg hover:bg-green-100 disabled:opacity-50"
+                    >
+                      <span className="text-lg">+</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quantity Selector (when not in cart) */}
+            {product.availability && !inCart && (
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Quantity</h3>
                 <div className="flex items-center space-x-4">
@@ -278,13 +373,41 @@ export default function ProductDetailPage({ params }) {
             {/* Action Buttons */}
             <div className="space-y-4">
               {product.availability ? (
-                <Button 
-                  onClick={handleAddToCart}
-                  className="w-full text-lg py-3"
-                  size="lg"
-                >
-                  Add to Cart - {formatCurrency(product.price * quantity)}
-                </Button>
+                <>
+                  {inCart ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Link href="/cart">
+                        <Button className="w-full text-lg py-3" size="lg">
+                          View Cart ({cartQuantity})
+                        </Button>
+                      </Link>
+                      <Link href="/checkout">
+                        <Button variant="outline" className="w-full text-lg py-3" size="lg">
+                          Checkout Now
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Button 
+                        onClick={handleAddToCart}
+                        className="w-full text-lg py-3"
+                        size="lg"
+                      >
+                        Add to Cart - {formatCurrency(product.price * quantity)}
+                      </Button>
+                      
+                      <Button 
+                        onClick={handleBuyNow}
+                        variant="outline"
+                        className="w-full text-lg py-3"
+                        size="lg"
+                      >
+                        Buy Now
+                      </Button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <Button 
                   disabled 
@@ -302,8 +425,12 @@ export default function ProductDetailPage({ params }) {
                   </Button>
                 </Link>
                 
-                <Button variant="outline" className="w-full">
-                  Add to Wishlist
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => toast.info('Wishlist feature coming soon!')}
+                >
+                  Save for Later
                 </Button>
               </div>
             </div>
@@ -315,11 +442,82 @@ export default function ProductDetailPage({ params }) {
                 <p>✅ Prepared following traditional rituals</p>
                 <p>✅ Fresh and blessed items</p>
                 <p>✅ Pan-India delivery available</p>
+                <p>✅ Free delivery above ₹500</p>
+                <p>✅ Secure payment options</p>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            {user && product.availability && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-semibold text-gray-900 mb-3">Quick Add Options:</h4>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addToCart(product, 2)}
+                    className="text-sm"
+                  >
+                    Add 2 Items
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addToCart(product, 5)}
+                    className="text-sm"
+                  >
+                    Add 5 Items
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addToCart(product, 10)}
+                    disabled={product.stock < 10}
+                    className="text-sm"
+                  >
+                    Add 10 Items
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Product Information Tabs */}
+        <div className="mt-12 border-t pt-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Product Details</h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p><strong>Category:</strong> {product.category || 'Prasad Items'}</p>
+                <p><strong>Preparation:</strong> Traditional method</p>
+                <p><strong>Shelf Life:</strong> 2-3 days</p>
+                <p><strong>Storage:</strong> Store in cool, dry place</p>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delivery Info</h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p><strong>Delivery Time:</strong> 2-3 business days</p>
+                <p><strong>Free Delivery:</strong> Above ₹500</p>
+                <p><strong>Packaging:</strong> Eco-friendly materials</p>
+                <p><strong>Coverage:</strong> Pan-India delivery</p>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quality Assurance</h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p><strong>Authenticity:</strong> 100% traditional recipes</p>
+                <p><strong>Blessing:</strong> Performed by experienced priests</p>
+                <p><strong>Quality:</strong> Premium ingredients only</p>
+                <p><strong>Hygiene:</strong> Prepared in clean environment</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }

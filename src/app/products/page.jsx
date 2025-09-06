@@ -1,62 +1,22 @@
-// src/app/products/page.jsx - Products Listing Page
+// src/app/products/page.jsx - Updated Products Page with New Navigation
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { useAuth } from '../../contexts/AuthContext';
-import { Button } from '../../components/ui/Button';
 import ProductList from '../../components/products/ProductList';
+import Layout from '../../components/layout/Layout';
 
 export default function ProductsPage() {
-  const { user, logout } = useAuth();
-
-  const handleLogout = async () => {
-    await logout();
-  };
-
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <Link href="/">
-                <h1 className="text-2xl font-bold text-gray-900 cursor-pointer">
-                  🙏 Chhath Prasadam Portal
-                </h1>
-              </Link>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">
-                    Welcome, {user.phoneNumber}
-                  </span>
-                  <Button variant="outline" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                </div>
-              ) : (
-                <Link href="/login">
-                  <Button>Login</Button>
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <Layout>
       {/* Breadcrumb */}
       <div className="bg-gray-100 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="inline-flex items-center space-x-1 md:space-x-3">
               <li className="inline-flex items-center">
-                <Link href="/" className="text-gray-700 hover:text-gray-900">
+                <a href="/" className="text-gray-700 hover:text-gray-900">
                   Home
-                </Link>
+                </a>
               </li>
               <li>
                 <div className="flex items-center">
@@ -143,21 +103,6 @@ export default function ProductsPage() {
           </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="bg-gray-800 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold mb-4">Chhath Prasadam Portal</h3>
-            <p className="text-gray-400 mb-4">
-              Bringing the blessings of Chhath Puja to your home
-            </p>
-            <p className="text-sm text-gray-500">
-              © 2025 Chhath Prasadam Portal. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </main>
+    </Layout>
   );
 }
